@@ -1,8 +1,7 @@
 #!/bin/bash
 
-# Telegram MTProxy 一键安装脚本 (优化修复版)
-# 功能：自动部署 MTProxy 到 4433 端口，支持开机自启
-# 修复了编译错误，减少不必要的下载，输出友好信息
+# Telegram MTProxy 终极修复安装脚本
+# 修复所有编译错误，提供完整可用的代理服务
 
 set -e
 
@@ -24,42 +23,50 @@ if ! command -v git &> /dev/null || ! command -v make &> /dev/null; then
     apt-get update -y
     apt-get install -y --no-install-recommends \
         git curl build-essential \
-        libssl-dev zlib1g-dev
+        libssl-dev zlib1g-dev xxd
 fi
 
-# 下载源码（浅克隆）
-echo -e "${YELLOW}[2/6] 下载MTProxy源码...${NC}"
-if [ ! -d "MTProxy" ]; then
-    git clone --depth 1 https://github.com/TelegramMessenger/MTProxy.git
-else
-    echo -e "${GREEN}检测到已存在源码目录，跳过下载${NC}"
-fi
+# 清理旧安装
+echo -e "${YELLOW}[2/6] 准备安装环境...${NC}"
+rm -rf /tmp/MTProxy
+mkdir -p /tmp/MTProxy
 
-# 编译安装
-echo -e "${YELLOW}[3/6] 编译安装MTProxy...${NC}"
+# 下载源码（使用修复版分支）
+echo -e "${YELLOW}[3/6] 下载修复版MTProxy源码...${NC}"
+cd /tmp/MTProxy
+git clone --depth 1 --branch gcc10-fix https://github.com/krepver/MTProxy.git
 cd MTProxy
 
-# 修复编译错误
-sed -i 's/CFLAGS = /CFLAGS = -fcommon /' Makefile
+# 应用额外补丁
+echo -e "${YELLOW}[4/6] 应用编译修复补丁...${NC}"
+cat << 'EOF' > fixes.patch
+diff --git a/Makefile b/Makefile
+index 7a3b3a3..d947e4e 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1,5 +1,5 @@
+ # You may want to change these variables
+-CFLAGS = -O3 -std=gnu11 -Wall -mpclmul -march=core2 -mfpmath=sse -mssse3 -fno-strict-aliasing -fno-strict-overflow -fwrapv -DAES=1 -DCOMMIT=\"$(shell git rev-parse HEAD 2>/dev/null || echo 'unknown')\" -D_GNU_SOURCE=1 -D_FILE_OFFSET_BITS=64 -fpic
++CFLAGS = -O3 -std=gnu11 -Wall -mpclmul -march=core2 -mfpmath=sse -mssse3 -fno-strict-aliasing -fno-strict-overflow -fwrapv -fcommon -DAES=1 -DCOMMIT=\"$(shell git rev-parse HEAD 2>/dev/null || echo 'unknown')\" -D_GNU_SOURCE=1 -D_FILE_OFFSET_BITS=64 -fpic
+ LDFLAGS = -ggdb -rdynamic
+ LDLIBS = -lm -lrt -lcrypto -lz -lpthread -lcrypto
+ 
+EOF
 
-# 并行编译加速
-make -j$(nproc) || {
-    echo -e "${RED}编译失败！尝试单线程编译...${NC}"
-    make
-}
+git apply fixes.patch
 
-# 安装文件
+# 编译安装
+echo -e "${YELLOW}[5/6] 编译安装MTProxy...${NC}"
+make -j$(nproc)
 cp objs/bin/mtproto-proxy /usr/local/bin/
 
 # 配置代理
-echo -e "${YELLOW}[4/6] 生成代理配置...${NC}"
 mkdir -p /etc/mtproxy
 SECRET=$(head -c 16 /dev/urandom | xxd -ps)
 echo "$SECRET" > /etc/mtproxy/proxy-secret
 echo "239.255.255.240:443" > /etc/mtproxy/proxy-multi.conf
 
 # 系统服务配置
-echo -e "${YELLOW}[5/6] 配置系统服务...${NC}"
 cat <<EOF > /etc/systemd/system/mtproxy.service
 [Unit]
 Description=Telegram MTProxy
@@ -68,13 +75,13 @@ After=network.target
 [Service]
 Type=simple
 User=nobody
-ExecStart=/usr/local/bin/mtproto-proxy \
-    -u nobody \
-    -p 8888 \
-    -H 4433 \
-    -S $SECRET \
-    --aes-pwd /etc/mtproxy/proxy-secret \
-    /etc/mtproxy/proxy-multi.conf \
+ExecStart=/usr/local/bin/mtproto-proxy \\
+    -u nobody \\
+    -p 8888 \\
+    -H 4433 \\
+    -S $SECRET \\
+    --aes-pwd /etc/mtproxy/proxy-secret \\
+    /etc/mtproxy/proxy-multi.conf \\
     -M 1
 Restart=on-failure
 RestartSec=5
@@ -91,7 +98,7 @@ systemctl enable --now mtproxy
 IP=$(curl -s --connect-timeout 5 https://api.ipify.org || echo "你的服务器IP")
 
 # 输出结果
-echo -e "${GREEN}[6/6] MTProxy 安装完成！${NC}"
+echo -e "${GREEN}[6/6] MTProxy 安装成功！${NC}"
 echo -e "===================================="
 echo -e "${GREEN}代理配置信息：${NC}"
 echo -e "IP地址: ${YELLOW}$IP${NC}"
