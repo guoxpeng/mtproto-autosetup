@@ -40,6 +40,7 @@ sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/guoxpeng/mtproto-au
 
 > 📌 **不用改任何东西**，直接复制粘贴就能用。  
 > 脚本会自动选一个**空闲端口**（20000~60000 之间），不用担心被占用。  
+> 安装完成后自动注册为全局命令 `mtg-manager`，之后直接用即可。  
 > 即使 mtg 程序无法生成密钥，脚本也会**自动用本地随机方式生成**，保证一次成功。
 
 ### 还可以加这些设置
@@ -79,9 +80,9 @@ sudo bash mtg-manager.sh install --domain www.google.com --port 8443
 | `mtg-manager update` | ⬆️ 升级到最新版本（配置和密码不变） |
 | `mtg-manager uninstall` | 🗑️ 卸载（配置会保留，方便重装） |
 
-> 💡 **第一次装好之后**，脚本会自动装成全局命令，以后直接打 `mtg-manager xxx` 就行，不用写路径。
+> 💡 **第一次装好之后**，脚本会自动装成全局命令（支持管道和本地文件两种安装方式），以后直接打 `mtg-manager xxx` 就行，不用写路径。
 
-> 🔄 **重启说明**：脚本通过 `systemctl enable mtg` 注册了开机自启，VPS 重启后代理会自动运行。当前端口和密钥除非重新执行 `install --force`，否则即使重启也不会改变。
+> 🔄 **重启说明**：脚本通过 `systemctl enable mtg` 注册了开机自启，VPS 重启后代理会自动运行。防火墙规则也会自动持久化（iptables-persistent），重启后不会丢失。当前端口和密钥除非重新执行 `install --force`，否则即使重启也不会改变。
 
 ---
 
@@ -217,4 +218,6 @@ mtg-manager uninstall
 - 🔄 觉得不安全了就执行 `rotate-secret` 换密码
 - 🌐 伪装域名选大网站（百度、必应、谷歌），不容易被识别
 - 👨‍👩‍👧‍👦 一台服务器只给家人朋友用，别公开分享
+- 🔒 密钥文件权限为 `600`（仅 root 可读），防止其他进程窃取
+- 🧱 防火墙规则自动持久化，重启 VPS 后 iptables 规则不丢失
 - 📋 请在法律允许的范围内使用

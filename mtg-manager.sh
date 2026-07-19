@@ -159,8 +159,21 @@ is_installed() { [ -x "$BIN" ] && [ -f "$CONFIG_FILE" ]; }
 self_install_to_path() {
     local target="$MANAGER_BIN"
     local self="${BASH_SOURCE[0]:-}"
-    if [ -n "$self" ] && [ -f "$self" ] && [ -r "$self" ] \
-       && [ "$(readlink -f "$self" 2>/dev/null)" != "$target" ]; then
+
+    # 检测是否通过管道运行（curl | bash），此时 BASH_SOURCE 不可用
+    if [ -z "$self" ] || [ ! -f "$self" ] || [ ! -r "$self" ]; then
+        log_info "检测到管道安装模式，从 GitHub 下载脚本到 $target ..."
+        curl -fsSL --connect-timeout 10 --max-time 30 \
+            "https://raw.githubusercontent.com/guoxpeng/mtproto-autosetup/main/mtg-manager.sh" \
+            -o "$target" 2>/dev/null && chmod +x "$target" 2>/dev/null && {
+            log_ok "已安装为全局命令，以后直接用: mtg-manager show / mtg-manager key"
+            return 0
+        }
+        log_warn "下载安装失败。如需保留请手动: sudo cp '<script>' $target && sudo chmod +x $target"
+        return 1
+    fi
+
+    if [ "$(readlink -f "$self" 2>/dev/null)" != "$target" ]; then
         if cp "$self" "$target" 2>/dev/null && chmod +x "$target" 2>/dev/null; then
             log_ok "已安装为全局命令，以后直接用: mtg-manager show / mtg-manager key"
             return 0
