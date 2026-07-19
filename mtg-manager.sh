@@ -167,27 +167,38 @@ is_installed() { [ -x "$BIN" ] && [ -f "$CONFIG_FILE" ]; }
 self_install_to_path() {
     local target="$MANAGER_BIN"
     local install_url="https://raw.githubusercontent.com/guoxpeng/mtproto-autosetup/main/mtg-manager.sh"
+    local installed=false
 
     # 方法1: 从已知的本地源文件复制
     if [ -n "$SCRIPT_SOURCE" ] && [ -f "$SCRIPT_SOURCE" ] && [ -r "$SCRIPT_SOURCE" ]; then
         if [ "$(readlink -f "$SCRIPT_SOURCE" 2>/dev/null)" != "$target" ] \
            && cp "$SCRIPT_SOURCE" "$target" 2>/dev/null && chmod +x "$target" 2>/dev/null; then
-            log_ok "已安装为全局命令，以后直接用: mtg-manager show / mtg-manager key"
-            return 0
+            installed=true
         fi
     fi
 
     # 方法2: 从 GitHub 下载（管道/curl 模式）
-    log_info "正在安装全局命令 mtg-manager ..."
-    if curl -fsSL --connect-timeout 10 --max-time 30 "$install_url" -o "$target" 2>/dev/null && chmod +x "$target" 2>/dev/null; then
-        log_ok "已安装为全局命令，以后直接用: mtg-manager show / mtg-manager key"
-        return 0
+    if ! $installed; then
+        log_info "正在安装全局命令 mtg-manager ..."
+        if curl -fsSL --connect-timeout 10 --max-time 30 "$install_url" -o "$target" && chmod +x "$target" 2>/dev/null; then
+            installed=true
+        fi
     fi
 
     # 方法3: 异常环境 + SSL 降级重试
-    log_warn "普通下载失败，尝试兼容模式 ..."
-    if curl -fskSL --connect-timeout 10 --max-time 30 "$install_url" -o "$target" && chmod +x "$target" 2>/dev/null; then
-        log_ok "已安装为全局命令（兼容模式）"
+    if ! $installed; then
+        log_warn "普通下载失败，尝试兼容模式 ..."
+        if curl -fskSL --connect-timeout 10 --max-time 30 "$install_url" -o "$target" && chmod +x "$target" 2>/dev/null; then
+            installed=true
+        fi
+    fi
+
+    if $installed; then
+        # 在 /usr/bin/ 创建符号链接（su 状态下 /usr/bin 始终在 PATH 中）
+        if [ "$target" != "/usr/bin/mtg-manager" ] && [ ! -f "/usr/bin/mtg-manager" ]; then
+            ln -sf "$target" "/usr/bin/mtg-manager" 2>/dev/null || true
+        fi
+        log_ok "已安装为全局命令，以后直接用: mtg-manager show / mtg-manager key"
         return 0
     fi
 
