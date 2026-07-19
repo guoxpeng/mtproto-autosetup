@@ -1,0 +1,14 @@
+# MTG MTProto Proxy Manager - 一键安装命令
+#
+# 仓库: https://github.com/guoxpeng/mtproto-autosetup
+#
+# 直接复制下面这行，粘贴到 VPS 终端，回车即可安装：
+# （自动选一个空闲端口，不用担心被占用）
+#
+#   sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/guoxpeng/mtproto-autosetup/main/mtg-manager.sh)" -- install
+#
+# 如果想指定端口，加 --port 8443：
+#
+#   sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/guoxpeng/mtproto-autosetup/main/mtg-manager.sh)" -- install --port 8443
+#
+# 装完之后，执行 mtg-manager show 查看代理信息。
