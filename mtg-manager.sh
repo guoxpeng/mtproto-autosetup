@@ -35,6 +35,14 @@ SERVICE_FILE="/etc/systemd/system/mtg.service"
 LOG_FILE="/var/log/mtg-manager.log"
 LOCK_FILE="/tmp/mtg-manager.lock"
 
+# ========== 保存脚本源路径（用于 self-install） ==========
+SCRIPT_SOURCE=""
+if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]}" ] && [ -r "${BASH_SOURCE[0]}" ]; then
+    SCRIPT_SOURCE="${BASH_SOURCE[0]}"
+elif [ -n "$0" ] && [ "$0" != "bash" ] && [ "$0" != "sh" ] && [ "$0" != "--" ] && [ -f "$0" ] && [ -r "$0" ]; then
+    SCRIPT_SOURCE="$0"
+fi
+
 # ========== 日志函数 ==========
 log_info() { echo -e "${BLUE}[INFO]${NC} $*"; echo "$(date '+%F %T') [INFO] $*" >> "$LOG_FILE" 2>/dev/null || true; }
 log_ok()   { echo -e "${GREEN}[OK]${NC} $*";   echo "$(date '+%F %T') [OK] $*"   >> "$LOG_FILE" 2>/dev/null || true; }
@@ -158,28 +166,34 @@ is_installed() { [ -x "$BIN" ] && [ -f "$CONFIG_FILE" ]; }
 # ========== 自我安装到 PATH ==========
 self_install_to_path() {
     local target="$MANAGER_BIN"
-    local self="${BASH_SOURCE[0]:-}"
+    local install_url="https://raw.githubusercontent.com/guoxpeng/mtproto-autosetup/main/mtg-manager.sh"
 
-    # 检测是否通过管道运行（curl | bash），此时 BASH_SOURCE 不可用
-    if [ -z "$self" ] || [ ! -f "$self" ] || [ ! -r "$self" ]; then
-        log_info "检测到管道安装模式，从 GitHub 下载脚本到 $target ..."
-        curl -fsSL --connect-timeout 10 --max-time 30 \
-            "https://raw.githubusercontent.com/guoxpeng/mtproto-autosetup/main/mtg-manager.sh" \
-            -o "$target" 2>/dev/null && chmod +x "$target" 2>/dev/null && {
-            log_ok "已安装为全局命令，以后直接用: mtg-manager show / mtg-manager key"
-            return 0
-        }
-        log_warn "下载安装失败。如需保留请手动: sudo cp '<script>' $target && sudo chmod +x $target"
-        return 1
-    fi
-
-    if [ "$(readlink -f "$self" 2>/dev/null)" != "$target" ]; then
-        if cp "$self" "$target" 2>/dev/null && chmod +x "$target" 2>/dev/null; then
+    # 方法1: 从已知的本地源文件复制
+    if [ -n "$SCRIPT_SOURCE" ] && [ -f "$SCRIPT_SOURCE" ] && [ -r "$SCRIPT_SOURCE" ]; then
+        if [ "$(readlink -f "$SCRIPT_SOURCE" 2>/dev/null)" != "$target" ] \
+           && cp "$SCRIPT_SOURCE" "$target" 2>/dev/null && chmod +x "$target" 2>/dev/null; then
             log_ok "已安装为全局命令，以后直接用: mtg-manager show / mtg-manager key"
             return 0
         fi
     fi
-    log_warn "未安装全局命令。如需保留请手动: sudo cp '<script>' $target && sudo chmod +x $target"
+
+    # 方法2: 从 GitHub 下载（管道/curl 模式）
+    log_info "正在安装全局命令 mtg-manager ..."
+    if curl -fsSL --connect-timeout 10 --max-time 30 "$install_url" -o "$target" 2>/dev/null && chmod +x "$target" 2>/dev/null; then
+        log_ok "已安装为全局命令，以后直接用: mtg-manager show / mtg-manager key"
+        return 0
+    fi
+
+    # 方法3: 异常环境 + SSL 降级重试
+    log_warn "普通下载失败，尝试兼容模式 ..."
+    if curl -fskSL --connect-timeout 10 --max-time 30 "$install_url" -o "$target" && chmod +x "$target" 2>/dev/null; then
+        log_ok "已安装为全局命令（兼容模式）"
+        return 0
+    fi
+
+    log_warn "安装失败。请手动执行:"
+    log_warn "  sudo curl -fsSL $install_url -o $target && sudo chmod +x $target"
+    return 1
 }
 
 # ========== 依赖安装 ==========
